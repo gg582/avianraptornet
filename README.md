@@ -69,7 +69,7 @@ pip install -r requirements.txt
 ### Training & Refinement
 ```python3
 python3 cifar100.py
-python3 cifar100.py --weights=path_to_weight.pth
+python3 finetune_cifar100.py --weights=path_to_weight.pth
 ```
 
 ---
