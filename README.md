@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache\_2.0-blue.svg)](LICENSE)
 [![Framework](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
-[![SOTA](https://img.shields.io/badge/CIFAR100-80.49%25-brightgreen.svg)]()
+[![SOTA](https://img.shields.io/badge/CIFAR100-81.28%25-brightgreen.svg)]()
 [![Params](https://img.shields.io/badge/Params-3.23M-yellow.svg)]()
 
 > **For Researchers:** If you use this model in your research, **you must cite** it. Failure to cite is a violation of the academic ethos. See the [Citation](#citation) section below.
@@ -15,7 +15,7 @@
 
 **AvianRaptorNet** is a biologically inspired convolutional neural network designed for **extreme efficiency**. It mimics the **Dual-Fovea system of Raptors (Birds of Prey)**, allowing the model to process fine details (central fovea) and broad context (peripheral fovea) simultaneously using a lightweight architecture.
 
-We have achieved **80.49% Top-1 Accuracy** on CIFAR-100 with only **3.23M parameters**, setting a new efficiency frontier beyond MobileNetV2 and GhostNet.
+We have achieved **81.28% Top-1 Accuracy** on CIFAR-100 with only **3.23M parameters**, setting a new efficiency frontier beyond MobileNetV2 and GhostNet.
 
 ### Key Features
 - **Extreme Efficiency:** 3.23M Params (~12MB). Designed for Edge AI (Jetson, Raspberry Pi, Mobile).
@@ -29,11 +29,12 @@ We have achieved **80.49% Top-1 Accuracy** on CIFAR-100 with only **3.23M parame
 
 | Model                   | Params   | Top-1 Acc | Training Strategy                          |
 |-------------------------|----------|-----------|--------------------------------------------|
-| **AvianRaptorNet-Fast** | **3.23M** | **80.49%** | Mixup + AutoAugment + Safe Refinement     |
+| **AvianRaptorNet-Fast** | **3.23M** | **81.28%%** | Mixup + AutoAugment + Safe Refinement     |
+| **AvianRaptorNet-Fast** | **3.23M** | **80.42%%** | Mixup + AutoAugment                       |
 | MobileNetV2 (ref)       | ~3.4M    | ~73-74%   | Standard                                   |
 | GhostNet (ref)          | ~5.2M    | ~74-77%   | Standard                                   |
 
-> **Note:** 80.49% achieved by ultra-low LR (1e-5) refinement after convergence — safely settles into global minima.
+> **Note:** 81.28% achieved by ultra-low LR (1e-5) refinement after convergence — safely settles into global minima.
 
 ---
 
@@ -81,7 +82,7 @@ python3 finetune_cifar100.py --weights=path_to_weight.pth
   title        = {AvianRaptorNet: Bio-Inspired Lightweight Vision Model with Raptor Dual-Flow Architecture},
   year         = {2025},
   publisher    = {GitHub},
-  note         = {Achieved 80.49% on CIFAR-100 with 3.23M parameters},
+  note         = {Achieved 81.28% on CIFAR-100 with 3.23M parameters},
   howpublished = {\url{https://github.com/gg582/aviannet}}
 }
 
