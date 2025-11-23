@@ -5,4 +5,7 @@ numpy>=1.24.0
 snntorch>=0.6.1
 onnxscript>=0.5.6
 datasets>=4.4.1
+opencv-python>=4.12.0.88
+pycocotools>=2.0.10
+ultralytics>=8.3.230
 

@@ -31,6 +31,7 @@ We have achieved **81.28% Top-1 Accuracy** on CIFAR-100 with only **3.23M parame
 |-------------------------|----------|-----------|--------------------------------------------|
 | **AvianRaptorNet-Fast** | **3.23M** | **81.28%** | Mixup + AutoAugment + Safe Refinement     |
 | **AvianRaptorNet-Fast** | **3.23M** | **80.42%** | Mixup + AutoAugment                       |
+| DenseNet-BC(ref)        | 2.8M     | **80-82%**  | AutoAugment                             |
 | MobileNetV2 (ref)       | ~3.4M    | ~73-74%   | Standard                                   |
 | GhostNet (ref)          | ~5.2M    | ~74-77%   | Standard                                   |
 
