@@ -1,0 +1,84 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+class nn.Module <<pytorch>> {
+}
+
+class BioMish <<module>> {
+  + forward(x: Tensor): Tensor
+}
+
+class ChannelAttention <<module>> {
+  - avg_pool: nn.AdaptiveAvgPool2d
+  - fc: nn.Sequential
+  + __init__(channels: int, reduction: int = 8)
+  + forward(x: Tensor): Tensor
+}
+
+class DropPath <<module>> {
+  - drop_prob: float
+  + __init__(drop_prob: float = 0.0)
+  + forward(x: Tensor): Tensor
+}
+
+class RaptorFovealLite <<module>> {
+  - central: nn.Sequential
+  - peripheral: nn.Sequential
+  - fusion: nn.Conv2d
+  - bn: nn.BatchNorm2d
+  + __init__(in_channels: int, out_channels: int)
+  + forward(x: Tensor): Tensor
+}
+
+class FeatherBlock <<module>> {
+  - use_res_connect: bool
+  - conv: nn.Sequential
+  - drop_path: nn.Module
+  + __init__(in_ch: int, out_ch: int, stride: int = 1, drop_path_rate: float = 0.0)
+  + forward(x: Tensor): Tensor
+}
+
+class AvianRaptorNet_Fast <<module>> {
+  - retina: nn.Sequential
+  - raptor_eye: RaptorFovealLite
+  - body: nn.Sequential
+  - global_pool: nn.AdaptiveAvgPool2d
+  - classifier_head: nn.Sequential
+  + __init__(num_classes: int = 100, dropout: float = 0.2, drop_path_rate: float = 0.0)
+  - _initialize_weights()
+  + forward(x: Tensor): Tensor
+}
+
+BioMish --|> nn.Module
+ChannelAttention --|> nn.Module
+DropPath --|> nn.Module
+RaptorFovealLite --|> nn.Module
+FeatherBlock --|> nn.Module
+AvianRaptorNet_Fast --|> nn.Module
+
+RaptorFovealLite *-- BioMish
+RaptorFovealLite *-- nn.Sequential : central, peripheral
+RaptorFovealLite *-- nn.Conv2d : fusion
+RaptorFovealLite *-- nn.BatchNorm2d : bn
+
+ChannelAttention *-- nn.AdaptiveAvgPool2d : avg_pool
+ChannelAttention *-- nn.Sequential : fc
+
+FeatherBlock *-- nn.Sequential : conv
+FeatherBlock *-- ChannelAttention
+FeatherBlock *-- DropPath
+
+AvianRaptorNet_Fast *-- RaptorFovealLite : raptor_eye
+AvianRaptorNet_Fast *-- FeatherBlock : body (7 blocks)
+AvianRaptorNet_Fast *-- nn.Sequential : retina
+AvianRaptorNet_Fast *-- nn.AdaptiveAvgPool2d : global_pool
+AvianRaptorNet_Fast *-- nn.Sequential : classifier_head
+
+note right of AvianRaptorNet_Fast
+  Body blocks (channel, stride):
+  (96->128, 2), (128->128, 1),
+  (128->256, 2), (256->256, 1),
+  (256->256, 1), (256->512, 2),
+  (512->512, 1)
+end note
+@enduml

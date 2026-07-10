@@ -1,0 +1,81 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+class nn.Module <<pytorch>> {
+}
+
+class BioMish <<module>> {
+  + forward(x: Tensor): Tensor
+}
+
+class SEBlock <<module>> {
+  - avg_pool: nn.AdaptiveAvgPool2d
+  - fc: nn.Sequential
+  + __init__(channels: int, reduction: int = 16)
+  + forward(x: Tensor): Tensor
+}
+
+class RaptorBottleneck <<module>> {
+  + expansion: int = 4
+  - conv1: nn.Conv2d
+  - bn1: nn.BatchNorm2d
+  - conv2_fovea: nn.Conv2d
+  - bn2_fovea: nn.BatchNorm2d
+  - conv2_periph: nn.Conv2d
+  - bn2_periph: nn.BatchNorm2d
+  - use_dual: bool
+  - conv3: nn.Conv2d
+  - bn3: nn.BatchNorm2d
+  - act: BioMish
+  - se: SEBlock
+  - shortcut: nn.Sequential
+  + __init__(in_planes: int, planes: int, stride: int = 1)
+  + forward(x: Tensor): Tensor
+}
+
+class AvianRaptorNet_Medium <<module>> {
+  - in_planes: int
+  - conv1: nn.Conv2d
+  - bn1: nn.BatchNorm2d
+  - act: BioMish
+  - layer1: nn.Sequential
+  - layer2: nn.Sequential
+  - layer3: nn.Sequential
+  - layer4: nn.Sequential
+  - avgpool: nn.AdaptiveAvgPool2d
+  - fc: nn.Linear
+  + __init__(num_classes: int = 100)
+  - _make_layer(planes: int, blocks: int, stride: int): nn.Sequential
+  - _initialize_weights()
+  + forward(x: Tensor): Tensor
+}
+
+BioMish --|> nn.Module
+SEBlock --|> nn.Module
+RaptorBottleneck --|> nn.Module
+AvianRaptorNet_Medium --|> nn.Module
+
+SEBlock *-- nn.AdaptiveAvgPool2d : avg_pool
+SEBlock *-- nn.Sequential : fc
+
+RaptorBottleneck *-- BioMish : act
+RaptorBottleneck *-- SEBlock : se
+RaptorBottleneck *-- nn.Sequential : shortcut
+RaptorBottleneck *-- nn.Conv2d : conv1, conv2_fovea, conv2_periph, conv3
+RaptorBottleneck *-- nn.BatchNorm2d : bn1, bn2_fovea, bn2_periph, bn3
+
+AvianRaptorNet_Medium *-- BioMish : act
+AvianRaptorNet_Medium *-- nn.Conv2d : conv1
+AvianRaptorNet_Medium *-- nn.BatchNorm2d : bn1
+AvianRaptorNet_Medium *-- nn.Sequential : layer1, layer2, layer3, layer4
+AvianRaptorNet_Medium *-- nn.AdaptiveAvgPool2d : avgpool
+AvianRaptorNet_Medium *-- nn.Linear : fc
+
+note right of AvianRaptorNet_Medium
+  Layer configuration [3, 4, 6, 3]:
+  layer1: 64 planes, stride 1
+  layer2: 128 planes, stride 2
+  layer3: 256 planes, stride 2
+  layer4: 512 planes, stride 2
+end note
+@enduml
