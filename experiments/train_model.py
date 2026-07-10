@@ -1,0 +1,343 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+
+# --- Configuration ---
+ETF_TICKERS = [
+    "SPY", "IVV", "VOO", "QQQ", "DIA", 
+    "IWM", "VUG", "BND", "GLD", "TLT",
+    "XLK", "XLF", "XLE", "XLU", "XLV", # Adding more sector-specific broad market ETFs
+    "XLI", "XLY", "XLP", "XLB", "XLC"
+] # Top 10+ broad market ETFs
+START_DATE = "2010-01-01"
+END_DATE = "2025-11-30" # Use historical data for training
+SEQUENCE_LENGTH = 60 # Number of past days to consider for prediction
+PREDICTION_DAYS = 1 # Predict 1 day into the future
+
+# --- Data Fetching and Preprocessing ---
+def fetch_data(tickers, start, end):
+    data = yf.download(tickers, start=start, end=end)
+    print("--- yf.download() output columns ---")
+    print(data.columns)
+    print("--- yf.download() output head ---")
+    print(data.head())
+    print("------------------------------------")
+    processed_data = {}
+
+    for ticker in tickers:
+        # Initialize a DataFrame for the current ticker
+        ticker_df = pd.DataFrame()
+        
+        # Explicitly check for each required column and add it
+        # The yfinance MultiIndex is (Metric, Ticker)
+        required_metrics = ['Open', 'High', 'Low', 'Close', 'Volume']
+        
+        for metric in required_metrics:
+            if (metric, ticker) in data.columns:
+                ticker_df[metric] = data[(metric, ticker)]
+        
+        if not ticker_df.empty:
+            # Drop rows with any NaN values within this ticker's data BEFORE feature calculation
+            ticker_df.dropna(inplace=True)
+            if not ticker_df.empty:
+                processed_data[ticker] = ticker_df
+            else:
+                print(f"Warning: {ticker} has no complete data after dropping NaNs in fetch_data.")
+        else:
+            print(f"Warning: No data found for {ticker}.")
+            
+    return processed_data
+
+def calculate_features(df):
+    # Ensure 'Close' and 'Volume' columns exist
+    if 'Close' not in df.columns or 'Volume' not in df.columns:
+        print("Required columns 'Close' or 'Volume' missing for feature calculation.")
+        return pd.DataFrame() # Return empty if essential columns are missing
+
+    # Daily Returns
+    df['Daily_Return'] = df['Close'].pct_change()
+
+    # Moving Averages
+    df['SMA_5'] = df['Close'].rolling(window=5).mean()
+    df['SMA_10'] = df['Close'].rolling(window=10).mean()
+    df['SMA_20'] = df['Close'].rolling(window=20).mean()
+
+    # Exponential Moving Averages (for MACD)
+    df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+
+    # MACD
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    # Relative Strength Index (RSI)
+    delta = df['Close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+
+    # Handle division by zero for RSI: if avg_loss is zero, rs becomes inf.
+    # We'll replace inf with NaN later and drop it.
+    # If avg_loss is zero and avg_gain is also zero, rs is NaN.
+    # If avg_gain is positive and avg_loss is zero, rs is inf.
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rs = avg_gain / avg_loss
+    
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Volume Change
+    df['Volume_Change'] = df['Volume'].pct_change()
+
+    # Volatility (Standard Deviation of Daily Returns)
+    df['Volatility'] = df['Daily_Return'].rolling(window=14).std()
+
+    # Average True Range (ATR)
+    # TR = max[(High - Low), abs(High - Prev. Close), abs(Low - Prev. Close)]
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df['ATR'] = tr.rolling(window=14).mean()
+
+    # Bollinger Bands
+    df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+    df['BB_Upper'] = df['BB_Middle'] + (df['Close'].rolling(window=20).std() * 2)
+    df['BB_Lower'] = df['BB_Middle'] - (df['Close'].rolling(window=20).std() * 2)
+
+    print(f"  DataFrame size before dropna in calculate_features: {len(df)}")
+    # Replace inf values with NaN before dropping
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.dropna(inplace=True)
+    print(f"  DataFrame size after dropna in calculate_features: {len(df)}")
+    
+    # Select the features we want to use for the model
+    selected_features = [
+        'Close', 'Volume', 'Daily_Return',
+        'SMA_5', 'SMA_10', 'SMA_20',
+        'MACD', 'Signal_Line', 'RSI', 'Volume_Change',
+        'Volatility', 'ATR', 'BB_Middle', 'BB_Upper', 'BB_Lower'
+    ]
+    
+    # Filter out features that might not have been created due to insufficient data
+    final_features = [f for f in selected_features if f in df.columns]
+
+    return df[final_features]
+
+def create_sequences(data_df, sequence_length, prediction_days):
+    X, y = [], []
+    
+    # Ensure data_df has enough rows for sequence creation after feature calculation
+    if len(data_df) < sequence_length + prediction_days:
+        return np.array([]), np.array([])
+
+    for i in range(len(data_df) - sequence_length - prediction_days + 1):
+        # Features: past 'sequence_length' days' calculated features
+        features = data_df.iloc[i : i + sequence_length].values
+        
+        # Target: price movement (up/down) for 'prediction_days' later
+        # We predict based on 'Close' movement
+        target_price_today = data_df['Close'].iloc[i + sequence_length - 1]
+        target_price_future = data_df['Close'].iloc[i + sequence_length + prediction_days - 1]
+        
+        # Add check for division by zero
+        if target_price_today == 0 or np.isnan(target_price_today):
+            # Skip this sequence if the price is zero or NaN, as it's an invalid state for percentage change
+            continue
+            
+        price_change_percent = (target_price_future - target_price_today) / target_price_today
+        
+        # 5-Class Classification Logic
+        if price_change_percent < -0.01:      # Strong Down
+            target = 0
+        elif price_change_percent < -0.002:   # Down
+            target = 1
+        elif price_change_percent < 0.002:    # Hold
+            target = 2
+        elif price_change_percent < 0.01:     # Up
+            target = 3
+        else:                                 # Strong Up
+            target = 4
+        
+        X.append(features)
+        y.append(target)
+    return np.array(X), np.array(y)
+
+# --- Neural Network Model ---
+class StockPredictor(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
+        super(StockPredictor, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        # x shape: (batch_size, seq_len, input_dim)
+        
+        # Initialize hidden state and cell state
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).to(x.device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).to(x.device)
+        
+        # We need to pass both h0 and c0 to the LSTM
+        out, _ = self.lstm(x, (h0, c0))  
+        
+        # Take the output from the last time step
+        out = self.fc(out[:, -1, :]) 
+        return out # Return logits
+
+# --- Main Training Logic ---
+def train_model():
+    print("Fetching data...")
+    etf_raw_data = fetch_data(ETF_TICKERS, START_DATE, END_DATE)
+    print(f"Fetched raw data for {len(etf_raw_data)} ETFs.")
+    
+    X_combined, y_combined = [], []
+    scalers = {} # To store scalers for each ETF and each feature
+
+    for ticker, data_df in etf_raw_data.items():
+        if data_df.empty:
+            print(f"Skipping {ticker} due to empty raw data after fetch.")
+            continue
+        
+        print(f"Processing {ticker} (raw data length: {len(data_df)})...")
+        # Calculate features for the current ETF
+        features_df = calculate_features(data_df.copy()) # Pass a copy to avoid SettingWithCopyWarning
+        
+        if features_df.empty:
+            print(f"Skipping {ticker} due to empty features_df after calculation.")
+            continue
+        
+        # Scale the features
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        # Fit and transform all feature columns
+        scaled_features = scaler.fit_transform(features_df)
+        scaled_features_df = pd.DataFrame(scaled_features, columns=features_df.columns, index=features_df.index)
+        
+        scalers[ticker] = scaler # Store scaler for later use (e.g., prediction)
+
+        # Create sequences for the current ETF using the scaled multi-feature data
+        X_etf, y_etf = create_sequences(scaled_features_df, SEQUENCE_LENGTH, PREDICTION_DAYS)
+        
+        if X_etf.size > 0:
+            X_combined.append(X_etf)
+            y_combined.append(y_etf)
+
+    if not X_combined:
+        print("No sequences created across all ETFs. Exiting.")
+        return
+
+
+    # Combine all ETF features and targets
+    X_combined = np.vstack(X_combined) # Stack all ETF feature sequences
+    y_combined = np.hstack(y_combined) # Stack all ETF targets
+
+    # X_combined shape: (num_samples, sequence_length, num_features_per_day)
+    # The LSTM expects input in this 3D format.
+
+    num_features_per_day = X_combined.shape[2] # Number of features we calculated
+    
+    # Do NOT reshape X_combined to flatten the sequence.
+    # It should remain (num_samples, SEQUENCE_LENGTH, num_features_per_day)
+
+    X_train, X_test, y_train, y_test = train_test_split(X_combined, y_combined, test_size=0.2, random_state=42, stratify=y_combined)
+
+    # Convert to PyTorch tensors
+    X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+    y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+    X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+    y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+
+    # Model parameters for LSTM
+    input_dim = num_features_per_day
+    hidden_dim = 64 # Hidden units in the LSTM
+    num_layers = 7 # Number of LSTM layers
+    output_dim = 5 # For (down, hold, up, etc) classification
+
+    model = StockPredictor(input_dim, hidden_dim, num_layers, output_dim)
+    criterion = nn.CrossEntropyLoss() 
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+
+    # Early Stopping parameters
+    epochs = 1000
+    batch_size = 32
+    patience = 10 # Number of epochs to wait after last improvement
+    min_delta = 0.001 # Minimum change to be considered an improvement
+
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+
+    # Split X_train, y_train into training and validation sets for early stopping
+    X_train_actual, X_val, y_train_actual, y_val = train_test_split(
+        X_train_tensor, y_train_tensor, test_size=0.1, random_state=42, stratify=y_train_tensor
+    )
+
+    print("Starting training...")
+    for epoch in range(epochs):
+        model.train()
+        train_loss, train_correct, train_total = 0.0, 0, 0
+        for i in range(0, len(X_train_actual), batch_size):
+            batch_X = X_train_actual[i:i+batch_size]
+            batch_y = y_train_actual[i:i+batch_size]
+            optimizer.zero_grad()
+            outputs = model(batch_X)
+            loss = criterion(outputs, batch_y)
+            loss.backward()
+            optimizer.step()
+            _, predicted = torch.max(outputs.data, 1)
+            train_total += batch_y.size(0)
+            train_correct += (predicted == batch_y).sum().item()
+            train_loss += loss.item() * batch_X.size(0)
+
+        avg_train_loss = train_loss / len(X_train_actual)
+        avg_train_acc = 100 * train_correct / train_total
+
+        model.eval()
+        with torch.no_grad():
+            val_outputs = model(X_val)
+            val_loss = criterion(val_outputs, y_val)
+            _, val_predicted = torch.max(val_outputs.data, 1)
+            val_acc = 100 * (val_predicted == y_val).float().mean().item()
+
+        print(f"Epoch [{epoch+1}/{epochs}]")
+        print(f"  Train Loss: {avg_train_loss:.4f} | Train Acc: {avg_train_acc:.2f}%")
+        print(f"  Val Loss:   {val_loss.item():.4f} | Val Acc:   {val_acc:.2f}%")
+
+        # Early stopping check
+        if val_loss.item() < best_val_loss - min_delta:
+            best_val_loss = val_loss.item()
+            epochs_no_improve = 0
+            # Optionally save the best model here if desired
+            # torch.save(model.state_dict(), "best_stock_predictor_model.pth")
+        else:
+            epochs_no_improve += 1
+            print(f"Early stopping: {epochs_no_improve} epochs without improvement.")
+            if epochs_no_improve >= patience:
+                print(f"Early stopping triggered after {epoch+1} epochs.")
+                break
+
+    print("Training complete. Saving model and scalers...")
+    torch.save(model.state_dict(), "stock_predictor_model.pth")
+    
+    import joblib
+    joblib.dump(scalers, "etf_scalers.pkl") # Save the dictionary of scalers
+    
+    print("Model and scalers saved.")
+
+    # Evaluate on test set (simple accuracy)
+    model.eval()
+    with torch.no_grad():
+        test_outputs = model(X_test_tensor)
+        _, predicted = torch.max(test_outputs.data, 1) # Get the index of the max log-probability
+        accuracy = (predicted == y_test_tensor).float().mean() # Compare with original y_test_tensor
+        print(f"Test Accuracy: {accuracy.item():.4f}")
+
+if __name__ == "__main__":
+    train_model()

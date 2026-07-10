@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.env
+
+# Model checkpoints and weights
+*.pth
+*.pt
+*.ckpt
+
+# Training logs
+*.log
+
+# Datasets
+data/
+dataset/
+
+# Generated images/media
+*.jpg
+*.jpeg
+*.png
+
+# Binary artifacts
+*.pkl
+*.p1
+*.pkl

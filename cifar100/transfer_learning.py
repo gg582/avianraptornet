@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +12,7 @@ import torchvision.transforms as transforms
 from torch.amp import autocast, GradScaler
 
 # Import the model definition
-from avian_model import AvianRaptorNet_Fast
+from core.avian_model import AvianRaptorNet_Fast
 
 def main():
     parser = argparse.ArgumentParser(description='Train AvianRaptorNet on Custom Dataset')

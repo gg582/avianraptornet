@@ -59,7 +59,34 @@ We have achieved **81.28% Top-1 Accuracy** on CIFAR-100 with only **3.23M parame
 
 ---
 
-## 5. Usage
+## 5. Teacup Classification (mobrew Project)
+
+Repurposing AvianRaptorNet for high-fidelity teacup and tea set classification. This sub-project focuses on distinguishing fine patterns and physical silhouettes using the **Dual-Flow** architecture.
+
+### Dataset Pipeline
+1. **Scraping:** `scrape_teacup.py` - Categorized scraping using specialized prompts (Shape, Detail, Style).
+2. **Filtering:** `filter_non_teacup.py` - Automated data cleansing using ResNet50 to ensure only teacup-related images are kept.
+3. **Fine-tuning:** `fine_tune_teacup.py` - Transfer learning from CIFAR-100 weights to teacup categories, optimized for **RTX 3070** (AMP, Channels Last).
+4. **Clustering:** `teacup_auto_cluster.py` - Unsupervised discovery of sub-categories using AvianRaptorNet as a feature extractor.
+
+### Usage
+```bash
+# 1. Scrape data
+python scrape_teacup.py
+
+# 2. Clean data
+python filter_non_teacup.py
+
+# 3. Fine-tune model
+python fine_tune_teacup.py
+
+# 4. Run inference
+python teacup_inference.py <image_path>
+```
+
+---
+
+## 6. Installation & Usage
 
 ### Installation
 ```python3
@@ -76,7 +103,55 @@ python3 finetune_cifar100.py --weights=path_to_weight.pth
 
 ---
 
-## 6. Citation
+## 6. COCO Object-Crop Fine-Tuning
+
+This project includes a transfer-learning pipeline that fine-tunes the CIFAR-100 pretrained **AvianRaptorNet-Fast** on COCO object crops for the 80 COCO thing categories.
+
+### How it works
+
+- **Source checkpoint:** `avian_raptor_fast_best.pth` (CIFAR-100, 100 classes)
+- **Target task:** classify cropped COCO objects into the 80 COCO categories
+- **Pipeline:**
+  1. Load the pretrained backbone and replace the classifier head from 100 → 80 classes.
+  2. **Primary stage:** SGD with mixup + AutoAugment for 40 epochs → `avian_coco_primary.pth`
+  3. **Refinement stage:** AdamW with an ultra-low learning rate (1e-5) for 10 epochs → `avian_coco_refined.pth`
+
+### Hardware / tuning notes
+
+These defaults are tuned for an **RTX 3070 8 GB** card. Larger resolutions or batch sizes run out of memory on this GPU.
+
+| Setting | Value |
+|---------|-------|
+| Input resolution | 128 × 128 |
+| Batch size | 12 |
+| `num_workers` | 0 |
+| Primary optimizer | SGD, lr=0.01, momentum=0.9, weight_decay=1e-4 |
+| Refinement optimizer | AdamW, lr=1e-5, weight_decay=1e-4 |
+| Primary epochs | 40 |
+| Refinement epochs | 10 |
+
+### Usage
+
+```bash
+# Full two-stage training (requires ./data/coco_subset_20k)
+python coco.py
+
+# If you already have avian_coco_primary.pth and only want to rerun refinement:
+python coco.py --skip-primary
+```
+
+### Outputs
+
+| Checkpoint | Val Top-1 Accuracy | File |
+|------------|-------------------|------|
+| Primary | **60.50%** | `avian_coco_primary.pth` |
+| Refined | **62.34%** | `avian_coco_refined.pth` |
+
+Both checkpoints can be loaded with `AvianRaptorNet_Fast(num_classes=80)`.
+
+---
+
+## 7. Citation
 
 @misc{AvianRaptorNet2025,
   author       = {gg582},
@@ -89,6 +164,6 @@ python3 finetune_cifar100.py --weights=path_to_weight.pth
 
 ---
 
-## 7. License
+## 8. License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.

@@ -1,4 +1,5 @@
 import cv2
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -92,7 +93,10 @@ class AvianRaptorNet_Fast(nn.Module):
 # ============================================================
 # 2. CONFIGURATION & LABELS
 # ============================================================
-WEIGHTS_PATH = 'avian_raptor_fast_best.pth' # Ensure this file exists
+WEIGHTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'avian_raptor_fast_best.pth'
+) # Ensure this file exists
 NUM_CLASSES = 100 # CIFAR-100 Standard
 IMG_SIZE = 32     # CIFAR Standard
 

@@ -28,6 +28,20 @@ class ChannelAttention(nn.Module):
         y = self.fc(y)
         return x * y
 
+class DropPath(nn.Module):
+    """Stochastic depth (drop path) regularization."""
+    def __init__(self, drop_prob=0.0):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        if self.drop_prob == 0.0 or not self.training:
+            return x
+        keep_prob = 1.0 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        mask = x.new_empty(shape).bernoulli_(keep_prob)
+        return x.div(keep_prob) * mask
+
 # --------------------------------------------------------
 # Blocks
 # --------------------------------------------------------
@@ -54,7 +68,7 @@ class RaptorFovealLite(nn.Module):
         return self.bn(self.fusion(torch.cat([c, p], dim=1)))
 
 class FeatherBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, stride=1):
+    def __init__(self, in_ch, out_ch, stride=1, drop_path_rate=0.0):
         super().__init__()
         self.use_res_connect = (stride == 1 and in_ch == out_ch)
         exp_size = in_ch * 2
@@ -69,17 +83,18 @@ class FeatherBlock(nn.Module):
             nn.Conv2d(exp_size, out_ch, 1, bias=False),
             nn.BatchNorm2d(out_ch)
         )
+        self.drop_path = DropPath(drop_path_rate) if self.use_res_connect else nn.Identity()
 
     def forward(self, x):
         if self.use_res_connect:
-            return x + self.conv(x)
+            return x + self.drop_path(self.conv(x))
         return self.conv(x)
 
 # --------------------------------------------------------
 # AvianRaptorNet Fast
 # --------------------------------------------------------
 class AvianRaptorNet_Fast(nn.Module):
-    def __init__(self, num_classes=100):
+    def __init__(self, num_classes=100, dropout=0.2, drop_path_rate=0.0):
         super().__init__()
         self.retina = nn.Sequential(
             nn.Conv2d(3, 48, 3, stride=1, padding=1, bias=False),
@@ -87,20 +102,33 @@ class AvianRaptorNet_Fast(nn.Module):
             BioMish()
         )
         self.raptor_eye = RaptorFovealLite(48, 96)
-        self.body = nn.Sequential(
-            FeatherBlock(96, 128, stride=2),
-            FeatherBlock(128, 128, stride=1),
-            FeatherBlock(128, 256, stride=2),
-            FeatherBlock(256, 256, stride=1),
-            FeatherBlock(256, 256, stride=1),
-            FeatherBlock(256, 512, stride=2),
-            FeatherBlock(512, 512, stride=1),
-        )
+
+        # Linearly increase stochastic depth rate across residual blocks.
+        blocks = [
+            (96, 128, 2),
+            (128, 128, 1),
+            (128, 256, 2),
+            (256, 256, 1),
+            (256, 256, 1),
+            (256, 512, 2),
+            (512, 512, 1),
+        ]
+        num_res_blocks = sum(1 for in_ch, out_ch, stride in blocks if stride == 1 and in_ch == out_ch)
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, num_res_blocks)] if num_res_blocks > 0 else []
+        dpr_iter = iter(dpr)
+
+        self.body = nn.Sequential(*[
+            FeatherBlock(
+                in_ch, out_ch, stride=stride,
+                drop_path_rate=next(dpr_iter) if (stride == 1 and in_ch == out_ch) else 0.0
+            )
+            for in_ch, out_ch, stride in blocks
+        ])
         self.global_pool = nn.AdaptiveAvgPool2d(1)
         self.classifier_head = nn.Sequential(
             nn.Conv2d(512, 768, 1, bias=False),
             BioMish(),
-            nn.Dropout(0.2),
+            nn.Dropout(dropout),
             nn.Flatten(),
             nn.Linear(768, num_classes)
         )
