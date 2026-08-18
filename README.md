@@ -150,7 +150,81 @@ All checkpoints can be loaded with `AvianRaptorNet_Fast(num_classes=80)`.
 
 ---
 
-## 8. Citation
+## 8. BOLO (Birds Only Live Once) — Motion-Robust YOLO11 Detector
+
+**BOLO** extends AvianRaptorNet into the latest YOLO (YOLO11n) detection
+architecture and adds a dual-stride motion correction layer, targeting
+motion-blurred video frames on embedded devices. The name is a parody of
+YOLO: *Birds Only Live Once*.
+
+### Architecture
+
+- **Base:** YOLO11n backbone/neck/head (`bolo/bolo11n.yaml`), ~2.9M params.
+- **RaptorFoveal** after the stem: parallel foveal (3x3) + peripheral
+  (dilated 3x3) streams from AvianRaptorNet.
+- **FeatherBlock** in the P3/P4 backbone stages: inverted-bottleneck
+  depthwise block with channel attention.
+- **MotionStrideAttention** on P5 and P3: captures motion blur / momentum
+  at two spatial strides — a large-stride (4x) branch for coarse momentum
+  and a small-stride (2x) branch for fine momentum. The two energy maps are
+  fused into a sigmoid attention map that gates a depthwise residual
+  correction (inverse-estimation / deblur) branch:
+  `out = x + attn * corr(x)`.
+
+### Training
+
+Synthetic motion-blur augmentation (random direction, 5–31 px kernels,
+probability 0.3 by default) teaches the network to detect under blur; no
+video dataset is required. The COCO 20k subset is converted to YOLO format
+by `bolo/prepare_data.py` (18,974 train / 1,026 val images, 143k boxes).
+
+```bash
+# 1. Convert the COCO subset to YOLO labels (+ tiny smoke split)
+python -m bolo.prepare_data --tiny
+
+# 2. Smoke test (tiny split, validates the full pipeline)
+python -m bolo.train_bolo --data bolo_tiny.yaml --epochs 2 --name bolo_smoke
+
+# 3. Full training (RTX 3070 8 GB defaults)
+python -m bolo.train_bolo --data bolo_coco20k.yaml --epochs 100 --batch 16 --name bolo_full
+```
+
+### Export (final stage: .pth + embedded ONNX)
+
+```bash
+python -m bolo.export_bolo --weights runs/bolo/bolo_full/weights/best.pt
+```
+
+Produces in the project root:
+
+| File | Description |
+|------|-------------|
+| `bolo11n_avian.pth` | fused model state dict |
+| `bolo11n_avian_fp32.onnx` | slimmed FP32 graph (reference) |
+| `bolo11n_avian_fp16.onnx` | embedded-optimized FP16 model (fixed shape, onnxslim, parity-checked with onnxruntime) |
+
+---
+
+## 9. BOLO-CIFAR100 Classifier
+
+`BoloCIFAR100` reforms the proven `../aviannet` AvianRaptorNet-Fast model for
+native 32 x 32 CIFAR-100 images. It retains the checkpoint-compatible
+backbone/classifier and inserts identity-initialized dual-stride motion layers
+at its 256- and 512-channel feature stages.
+
+```bash
+# CIFAR-100 downloads to data/ automatically on the first run.
+python -m bolo.train_cifar100 --data ../aviannet/data --epochs 40 --batch-size 256 \
+  --init-weights ../aviannet/avian_raptor_fast_best.pth
+python -m bolo.export_cifar100 --weights bolo_cifar100_best.pth
+```
+
+This creates `bolo_cifar100.pth`, `bolo_cifar100_fp32.onnx`, and
+`bolo_cifar100_fp16.onnx`. The ONNX input is `[batch, 3, 32, 32]`.
+
+---
+
+## 10. Citation
 
 ```bibtex
 @misc{AvianRaptorNet2025,
