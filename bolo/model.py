@@ -23,11 +23,13 @@ def register_bolo_modules():
         setattr(tasks, m.__name__, m)
 
 
-def build_bolo(cfg=None, scale="n", verbose=True):
-    """Build the BOLO DetectionModel."""
+def build_bolo(cfg=None, scale="n", nc=None, verbose=True):
+    """Build the BOLO DetectionModel. `nc` overrides the yaml class count."""
     register_bolo_modules()
     from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 
     d = yaml_model_load(str(cfg or BOLO_YAML))
     d["scale"] = scale
+    if nc is not None:
+        d["nc"] = nc
     return DetectionModel(d, ch=3, verbose=verbose)

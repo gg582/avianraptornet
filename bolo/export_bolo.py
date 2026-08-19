@@ -65,7 +65,12 @@ def load_model(weights: str):
     if state is None:
         raise ValueError(f"no model state found in {weights}")
 
-    model = build_bolo(cfg=BOLO_YAML, verbose=False)
+    # Infer the trained class count from the Detect head (yaml default is 80).
+    nc = next(
+        (v.shape[0] for k, v in state.items() if k.endswith(".cv3.2.2.bias")),
+        None,
+    )
+    model = build_bolo(cfg=BOLO_YAML, nc=nc, verbose=False)
     model.load_state_dict({k: v for k, v in state.items() if not k.startswith("criterion")}, strict=False)
     return model.eval().float()
 
