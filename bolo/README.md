@@ -12,6 +12,12 @@ dual-stride motion-attention layer for blurred video frames.
 - `bolo11n.yaml` — YOLO11n-compatible model definition.
 - `augment.py` — random linear motion blur augmentation.
 - `prepare_data.py` — COCO annotations to YOLO labels conversion.
+- `prepare_neatable.py` — 17-class desk-tidy dataset (TACO + office + COCO).
+- `prepare_oid.py` — OpenImages download/conversion for classes missing from
+  COCO (desk, plate, mug, pencil case, eraser, plus extra pen/ruler/scissors).
+- `prepare_everyday.py` — 29-class everyday-objects dataset (neatable 17 +
+  backpack, handbag, plate, bowl, spoon, fork, knife, mug, toothbrush, desk,
+  pencil case, eraser). Writes `bolo_everyday.yaml`.
 - `train_bolo.py` — BOLO training entry point.
 - `export_bolo.py` — fused PyTorch state-dict, FP32 ONNX, and FP16 ONNX export.
 
@@ -34,7 +40,24 @@ python -m bolo.train_bolo --data bolo_coco20k.yaml --epochs 100 --batch 16 --nam
 python -m bolo.export_bolo --weights runs/bolo/bolo_full/weights/best.pt
 ```
 
-The exporter writes these files to the repository root:
+## Everyday-objects dataset (29 classes)
+
+```bash
+# Download OpenImages images for the non-COCO classes (one-time, ~2 GB).
+python -m bolo.prepare_oid
+
+# Build the merged dataset and bolo_everyday.yaml.
+python -m bolo.prepare_everyday
+
+# Train (~3 h on an RTX 3070 at 70 epochs).
+python -m bolo.train_bolo --data bolo_everyday.yaml --epochs 70 --batch 16 --name bolo_everyday
+
+# Export with a distinct prefix.
+python -m bolo.export_bolo --weights runs/bolo/bolo_everyday/weights/best.pt --prefix bolo_everyday
+```
+
+The exporter writes these files to the repository root (prefix defaults to
+`bolo11n_avian`, override with `--prefix`):
 
 | Artifact | Purpose |
 | --- | --- |

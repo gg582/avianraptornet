@@ -8,10 +8,10 @@ onnxruntime.
 Usage:
     python -m bolo.export_bolo --weights runs/bolo/bolo_smoke/weights/best.pt
 
-Outputs (project root):
-    bolo11n_avian.pth        raw state dict of the fused model
-    bolo11n_avian_fp32.onnx  slimmed FP32 graph (reference)
-    bolo11n_avian_fp16.onnx  final embedded-optimized model
+Outputs (project root, prefix via --prefix, default ``bolo11n_avian``):
+    <prefix>.pth        raw state dict of the fused model
+    <prefix>_fp32.onnx  slimmed FP32 graph (reference)
+    <prefix>_fp16.onnx  final embedded-optimized model
 """
 
 import argparse
@@ -24,9 +24,9 @@ import bolo  # noqa: F401  (registers custom modules)
 from bolo.model import BOLO_YAML
 
 ROOT = Path(__file__).resolve().parent.parent
-PTH_OUT = ROOT / "bolo11n_avian.pth"
-FP32_OUT = ROOT / "bolo11n_avian_fp32.onnx"
-FP16_OUT = ROOT / "bolo11n_avian_fp16.onnx"
+PTH_OUT = None
+FP32_OUT = None
+FP16_OUT = None
 
 
 def topologically_sort_graph(model):
@@ -132,10 +132,16 @@ def validate(model, dummy):
 
 
 def main():
+    global PTH_OUT, FP32_OUT, FP16_OUT
     ap = argparse.ArgumentParser(description="Export BOLO to .pth + FP16 ONNX")
     ap.add_argument("--weights", required=True, help="trained checkpoint (e.g. runs/bolo/.../weights/best.pt)")
     ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument("--prefix", default="bolo11n_avian", help="output filename prefix (written to project root)")
     args = ap.parse_args()
+
+    PTH_OUT = ROOT / f"{args.prefix}.pth"
+    FP32_OUT = ROOT / f"{args.prefix}_fp32.onnx"
+    FP16_OUT = ROOT / f"{args.prefix}_fp16.onnx"
 
     model = load_model(args.weights)
     model.fuse()
