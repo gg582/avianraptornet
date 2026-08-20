@@ -2,7 +2,7 @@
 path: /home/yjlee/avian-projs/bolo/data/everyday_objects
 train: train/images
 val: val/images
-nc: 29
+nc: 60
 names:
   0: bottle
   1: can
@@ -33,3 +33,34 @@ names:
   26: desk
   27: pencil case
   28: eraser
+  29: stapler
+  30: pencil sharpener
+  31: calculator
+  32: envelope
+  33: monitor
+  34: remote
+  35: headphones
+  36: printer
+  37: tablet
+  38: telephone
+  39: lamp
+  40: umbrella
+  41: microwave
+  42: oven
+  43: toaster
+  44: refrigerator
+  45: sink
+  46: vase
+  47: teddy bear
+  48: hair drier
+  49: chair
+  50: couch
+  51: bed
+  52: dining table
+  53: kettle
+  54: candle
+  55: towel
+  56: pillow
+  57: tissue box
+  58: soap dispenser
+  59: power outlet

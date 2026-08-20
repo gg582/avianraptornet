@@ -4,8 +4,8 @@ Streams kept to a minimum: expects ``oid_train_filtered.csv`` (already
 pre-filtered from the full oidv6 train annotations, see README) and the
 local ``validation-annotations-bbox.csv`` for the val split.
 
-Outputs a YOLO dataset under ``data/openimages_office/yolo`` with classes:
-    desk, plate, mug, pencil case, eraser, pen, ruler, scissors
+Outputs a YOLO dataset under ``data/openimages_office/yolo``; see CLASSES
+for the full class list (desk/plate/mug/... plus stationery & daily items).
 
 Usage:
     python -m bolo.prepare_oid
@@ -34,8 +34,41 @@ CLASSES = {
     "/m/0k1tl": ("pen", 1200, 200),
     "/m/0hdln": ("ruler", 1000, 200),
     "/m/01lsmm": ("scissors", 1000, 200),
+    # --- stationery / daily-item extension (indices 8+) ---
+    "/m/025fsf": ("stapler", 600, 150),
+    "/m/02ddwp": ("pencil sharpener", 500, 150),
+    "/m/024d2": ("calculator", 800, 200),
+    "/m/0frqm": ("envelope", 600, 150),
+    "/m/02522": ("monitor", 1000, 200),
+    "/m/0qjjc": ("remote", 800, 200),
+    "/m/01b7fy": ("headphones", 800, 200),
+    "/m/01m4t": ("printer", 800, 200),
+    "/m/0bh9flk": ("tablet", 600, 150),
+    "/m/07cx4": ("telephone", 1000, 200),
+    "/m/0dtln": ("lamp", 1000, 200),
+    "/m/03s_tn": ("kettle", 600, 150),
+    "/m/0c06p": ("candle", 600, 150),
+    "/m/0162_1": ("towel", 1000, 200),
+    "/m/034c16": ("pillow", 800, 200),
+    "/m/0h8nsvg": ("tissue box", 500, 150),
+    "/m/0c3mkw": ("soap dispenser", 500, 150),
+    "/m/03bbps": ("power outlet", 600, 150),
+    "/m/01m2v": ("keyboard", 1000, 200),
+    "/m/020lf": ("mouse", 1000, 200),
+    "/m/01c648": ("laptop", 1000, 200),
+    "/m/0bt_c3": ("book", 1000, 200),
+    "/m/080hkjn": ("handbag", 1000, 200),
+    "/m/0hnnb": ("umbrella", 1000, 200),
+    "/m/0fx9l": ("microwave", 800, 200),
+    "/m/029bxz": ("oven", 800, 200),
+    "/m/01k6s3": ("toaster", 600, 150),
+    "/m/040b_t": ("refrigerator", 1000, 200),
+    "/m/046dlr": ("clock", 600, 150),      # alarm clock
+    "/m/0h8mzrc": ("clock", 800, 200),     # wall clock
+    "/m/02p5f1q": ("cup", 1000, 200),      # coffee cup
 }
-NAME2IDX = {name: i for i, (name, *_rest) in enumerate(CLASSES.values())}
+# keyed by label id (not name): "clock" appears twice in CLASSES
+LID2IDX = {lid: i for i, lid in enumerate(CLASSES)}
 
 TRAIN_CSV = OID / "oid_train_filtered.csv"
 VAL_CSV = OID / "validation-annotations-bbox.csv"
@@ -126,14 +159,13 @@ def build_split(csv_path, split, caps, rng):
             continue
         lines = []
         for lid, xmin, xmax, ymin, ymax in picked[iid]:
-            name = CLASSES[lid][0]
             cx = (xmin + xmax) / 2
             cy = (ymin + ymax) / 2
             bw = xmax - xmin
             bh = ymax - ymin
             if bw <= 0 or bh <= 0:
                 continue
-            lines.append(f"{NAME2IDX[name]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
+            lines.append(f"{LID2IDX[lid]} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
         if not lines:
             continue
         link = img_out / f"oid_{iid}.jpg"

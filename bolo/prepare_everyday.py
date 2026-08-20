@@ -1,17 +1,16 @@
 """Build the extended everyday-objects detection dataset.
 
 Extends the 17-class neatable desk-tidy set (see bolo/prepare_neatable.py)
-with 12 everyday-object classes, for 29 classes total:
-
-    existing 17 + backpack, handbag, plate, bowl, spoon, fork, knife,
-    mug, toothbrush, desk, pencil case, eraser
+with everyday-object classes, for 60 classes total (indices 0-28 unchanged).
 
 Sources:
 - TACO (roboflow export): bottle/can/cup/paper/trash
 - Office supplies (kaggle): pen, highlighter, glue, scissors, tape, ruler
-- COCO 20k subset: desk objects + backpack/handbag/fork/knife/spoon/bowl/toothbrush
-- OpenImages (bolo/prepare_oid.py): desk, plate, mug, pencil case, eraser
-  plus extra pen/ruler/scissors boxes (these were scarce before)
+- COCO 20k subset: desk objects + backpack/handbag/fork/knife/spoon/bowl/
+  toothbrush + chair/couch/bed/dining table/tv/remote/microwave/oven/
+  toaster/sink/refrigerator/vase/teddy bear/hair drier/umbrella
+- OpenImages (bolo/prepare_oid.py): desk, plate, mug, pencil case, eraser,
+  pen/ruler/scissors top-ups, plus stationery & daily-item classes
 
 Images are symlinked; labels are rewritten with remapped class ids.
 Also writes ``bolo/bolo_everyday.yaml`` for training.
@@ -35,6 +34,13 @@ NAMES = [
     "book", "keyboard", "mouse", "cell phone", "clock", "laptop",
     "backpack", "handbag", "plate", "bowl", "spoon", "fork", "knife",
     "mug", "toothbrush", "desk", "pencil case", "eraser",
+    # --- stationery / daily-item extension (indices 29-59) ---
+    "stapler", "pencil sharpener", "calculator", "envelope", "monitor",
+    "remote", "headphones", "printer", "tablet", "telephone", "lamp",
+    "umbrella", "microwave", "oven", "toaster", "refrigerator", "sink",
+    "vase", "teddy bear", "hair drier", "chair", "couch", "bed",
+    "dining table", "kettle", "candle", "towel", "pillow", "tissue box",
+    "soap dispenser", "power outlet",
 ]
 IDX = {name: i for i, name in enumerate(NAMES)}
 
@@ -78,11 +84,28 @@ COCO_MAP = {
     44: IDX["spoon"],
     45: IDX["bowl"],
     79: IDX["toothbrush"],
+    # extension (ids verified against bolo/bolo_coco20k.yaml, COCO80 order)
+    25: IDX["umbrella"],
+    56: IDX["chair"],
+    57: IDX["couch"],
+    59: IDX["bed"],
+    60: IDX["dining table"],
+    62: IDX["monitor"],      # tv
+    65: IDX["remote"],
+    68: IDX["microwave"],
+    69: IDX["oven"],
+    70: IDX["toaster"],
+    71: IDX["sink"],
+    72: IDX["refrigerator"],
+    75: IDX["vase"],
+    77: IDX["teddy bear"],
+    78: IDX["hair drier"],
 }
 
 OID = ROOT / "data" / "openimages_office" / "yolo"
-# oid yolo class order (bolo/prepare_oid.py): desk, plate, mug, pencil case,
-# eraser, pen, ruler, scissors
+# oid yolo class order (bolo/prepare_oid.py CLASSES): indices 0-7 are the
+# original desk/plate/mug/pencil case/eraser/pen/ruler/scissors; 8+ are the
+# stationery / daily-item extension.
 OID_MAP = {
     0: IDX["desk"],
     1: IDX["plate"],
@@ -92,10 +115,42 @@ OID_MAP = {
     5: IDX["pen"],
     6: IDX["ruler"],
     7: IDX["scissors"],
+    # extension (indices follow CLASSES order in bolo/prepare_oid.py)
+    8: IDX["stapler"],
+    9: IDX["pencil sharpener"],
+    10: IDX["calculator"],
+    11: IDX["envelope"],
+    12: IDX["monitor"],
+    13: IDX["remote"],
+    14: IDX["headphones"],
+    15: IDX["printer"],
+    16: IDX["tablet"],
+    17: IDX["telephone"],
+    18: IDX["lamp"],
+    19: IDX["kettle"],
+    20: IDX["candle"],
+    21: IDX["towel"],
+    22: IDX["pillow"],
+    23: IDX["tissue box"],
+    24: IDX["soap dispenser"],
+    25: IDX["power outlet"],
+    26: IDX["keyboard"],
+    27: IDX["mouse"],
+    28: IDX["laptop"],
+    29: IDX["book"],
+    30: IDX["handbag"],
+    31: IDX["umbrella"],
+    32: IDX["microwave"],
+    33: IDX["oven"],
+    34: IDX["toaster"],
+    35: IDX["refrigerator"],
+    36: IDX["clock"],     # alarm clock
+    37: IDX["clock"],     # wall clock
+    38: IDX["cup"],       # coffee cup
 }
 
-COCO_MAX_TRAIN = 6000   # cap so COCO does not swamp the specialist sets
-COCO_VAL = 500
+COCO_MAX_TRAIN = 12000  # cap so COCO does not swamp the specialist sets
+COCO_VAL = 800
 TACO_VAL_MAX = 400
 
 
